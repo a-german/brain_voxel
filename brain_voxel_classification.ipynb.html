@@ -1,0 +1,134 @@
+<html>
+<head>
+<title>brain_voxel_classification.ipynb</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #808080;}
+.s1 { color: #a9b7c6;}
+.s2 { color: #cc7832;}
+.s3 { color: #6a8759;}
+.s4 { color: #6897bb;}
+.ls0 { height: 1px; border-width: 0; color: #4d4d4d; background-color:#4d4d4d}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_voxel_classification.ipynb</font>
+</center></td></tr></table>
+<pre><span class="s0">#%% 
+</span>
+<span class="s0"># data preprocessing</span>
+<span class="s2">import </span><span class="s1">tensorflow </span><span class="s2">as </span><span class="s1">tf</span>
+<span class="s2">import </span><span class="s1">h5py</span>
+<span class="s2">import </span><span class="s1">scipy.io</span>
+<span class="s2">import </span><span class="s1">numpy </span><span class="s2">as </span><span class="s1">np</span>
+<span class="s2">from </span><span class="s1">sklearn.model_selection </span><span class="s2">import </span><span class="s1">train_test_split</span>
+<span class="s2">from </span><span class="s1">tensorflow.keras </span><span class="s2">import </span><span class="s1">regularizers</span>
+<span class="s2">from </span><span class="s1">sklearn.preprocessing </span><span class="s2">import </span><span class="s1">StandardScaler</span>
+
+<span class="s1">export_path = </span><span class="s3">'/Your export path'</span>
+<span class="s1">f = h5py.File(</span><span class="s3">'TRAIN38.mat'</span><span class="s2">,</span><span class="s3">'r'</span><span class="s1">)</span>
+<span class="s1">arrays = {}</span>
+<span class="s2">for </span><span class="s1">k</span><span class="s2">, </span><span class="s1">v </span><span class="s2">in </span><span class="s1">f.items():</span>
+  <span class="s1">arrays[k] = np.array(v)</span>
+<span class="s1">f.close()</span>
+<span class="s1">train_data = arrays[</span><span class="s3">'data'</span><span class="s1">].transpose()</span>
+<span class="s1">train_region = arrays[</span><span class="s3">'region'</span><span class="s1">].transpose()</span>
+<span class="s1">prob_idx = arrays[</span><span class="s3">'prob_idx'</span><span class="s1">].transpose()</span>
+<span class="s2">del </span><span class="s1">arrays</span><span class="s2">, </span><span class="s1">f</span>
+<span class="s1">curr_set = np.where(prob_idx != </span><span class="s4">38</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+<span class="s1">set_data = train_data[curr_set</span><span class="s2">,</span><span class="s1">:]</span>
+<span class="s1">set_region = train_region[curr_set</span><span class="s2">,</span><span class="s1">:]</span>
+<span class="s1">print(set_data.shape)</span>
+<span class="s1">curr_val = np.where(prob_idx == </span><span class="s4">38</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+<span class="s1">val_data = train_data[curr_val</span><span class="s2">,</span><span class="s1">:]</span>
+<span class="s1">val_label = train_region[curr_val</span><span class="s2">,</span><span class="s1">:]</span>
+<span class="s1">print(val_data.shape)</span>
+<span class="s2">del </span><span class="s1">curr_set</span><span class="s2">, </span><span class="s1">curr_val</span><span class="s2">, </span><span class="s1">train_data</span><span class="s2">, </span><span class="s1">train_region</span>
+<span class="s1">X_train1</span><span class="s2">, </span><span class="s1">X_train2</span><span class="s2">, </span><span class="s1">y_train1</span><span class="s2">, </span><span class="s1">y_train2 = train_test_split(set_data</span><span class="s2">,</span><span class="s1">set_region</span><span class="s2">,</span><span class="s1">test_size = </span><span class="s4">0.01</span><span class="s2">, </span><span class="s1">random_state = </span><span class="s4">42</span><span class="s1">)</span>
+<span class="s2">del </span><span class="s1">set_data</span><span class="s2">, </span><span class="s1">set_region</span>
+<span class="s1">scaler = StandardScaler()</span>
+<span class="s1">scaler.fit(X_train1)</span>
+<span class="s1">X_train1 = scaler.transform(X_train1)</span>
+<span class="s1">val_data = scaler.transform(val_data)</span>
+<hr class="ls0"><span class="s0">#%% 
+</span>
+<span class="s0"># train model</span>
+<span class="s2">import </span><span class="s1">keras</span>
+<span class="s2">from </span><span class="s1">keras.models </span><span class="s2">import </span><span class="s1">Sequential</span>
+<span class="s2">from </span><span class="s1">keras.layers </span><span class="s2">import </span><span class="s1">Dense</span><span class="s2">, </span><span class="s1">Dropout</span>
+<span class="s2">from </span><span class="s1">keras </span><span class="s2">import </span><span class="s1">backend </span><span class="s2">as </span><span class="s1">K</span>
+<span class="s2">from </span><span class="s1">keras </span><span class="s2">import </span><span class="s1">activations</span>
+<span class="s0"># Model configuration</span>
+<span class="s1">batch_size = </span><span class="s4">128</span>
+<span class="s1">no_epochs = </span><span class="s4">25</span>
+<span class="s1">no_classes = </span><span class="s4">102</span>
+
+<span class="s2">def </span><span class="s1">create_reg_model():</span>
+  <span class="s1">input_shape = [</span><span class="s4">341</span><span class="s1">]</span>
+  <span class="s1">model = Sequential()</span>
+  <span class="s1">model.add(Dense(</span><span class="s4">4096</span><span class="s2">, </span><span class="s1">activation=</span><span class="s3">'relu'</span><span class="s2">, </span><span class="s1">input_shape=input_shape</span><span class="s2">, </span><span class="s1">kernel_regularizer=tf.keras.regularizers.l2(</span><span class="s4">0.00001</span><span class="s1">)))</span>
+  <span class="s1">model.add(Dropout(</span><span class="s4">0.5</span><span class="s1">))</span>
+  <span class="s1">model.add(Dense(</span><span class="s4">4096</span><span class="s2">, </span><span class="s1">activation=</span><span class="s3">'relu'</span><span class="s2">, </span><span class="s1">kernel_regularizer=tf.keras.regularizers.l2(</span><span class="s4">0.00001</span><span class="s1">)))</span>
+  <span class="s1">model.add(Dropout(</span><span class="s4">0.5</span><span class="s1">))</span>
+  <span class="s1">model.add(Dense(</span><span class="s4">4096</span><span class="s2">, </span><span class="s1">activation=</span><span class="s3">'relu'</span><span class="s2">, </span><span class="s1">kernel_regularizer=tf.keras.regularizers.l2(</span><span class="s4">0.00001</span><span class="s1">)))</span>
+  <span class="s1">model.add(Dropout(</span><span class="s4">0.5</span><span class="s1">))</span>
+  <span class="s1">model.add(Dense(</span><span class="s4">4096</span><span class="s2">, </span><span class="s1">activation=</span><span class="s3">'relu'</span><span class="s2">, </span><span class="s1">kernel_regularizer=tf.keras.regularizers.l2(</span><span class="s4">0.00001</span><span class="s1">)))</span>
+  <span class="s1">model.add(Dropout(</span><span class="s4">0.5</span><span class="s1">))</span>
+  <span class="s1">model.add(Dense(no_classes</span><span class="s2">, </span><span class="s1">activation=</span><span class="s3">'softmax'</span><span class="s2">, </span><span class="s1">name=</span><span class="s3">'visualized_layer'</span><span class="s1">))</span>
+  <span class="s2">return </span><span class="s1">model</span>
+<span class="s1">model = create_reg_model()</span>
+<span class="s1">model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=</span><span class="s4">0.00001</span><span class="s1">)</span><span class="s2">,</span><span class="s1">loss=</span><span class="s3">'categorical_crossentropy'</span><span class="s2">, </span><span class="s1">metrics=[</span><span class="s3">'accuracy'</span><span class="s1">])</span>
+<span class="s1">history = model.fit(X_train1</span><span class="s2">,</span><span class="s1">y_train1</span><span class="s2">,</span>
+          <span class="s1">epochs=no_epochs</span><span class="s2">,</span>
+          <span class="s1">batch_size = batch_size</span><span class="s2">,</span>
+          <span class="s1">validation_data=(val_data</span><span class="s2">,</span><span class="s1">val_label))</span>
+<span class="s1">model.save(export_path + </span><span class="s3">'dense_4x4096_model'</span><span class="s1">)</span>
+<hr class="ls0"><span class="s0">#%% 
+</span>
+<span class="s0">#apply model</span>
+<span class="s1">filepath = </span><span class="s3">'DEMO38.mat'</span>
+<span class="s1">arrays = {}</span>
+<span class="s1">f = h5py.File(filepath</span><span class="s2">,</span><span class="s3">'r'</span><span class="s1">)</span>
+<span class="s2">for </span><span class="s1">k</span><span class="s2">, </span><span class="s1">v </span><span class="s2">in </span><span class="s1">f.items():</span>
+  <span class="s1">arrays[k] = np.array(v)</span>
+<span class="s1">f.close()</span>
+<span class="s1">multidim_data = arrays[</span><span class="s3">'multidim_data'</span><span class="s1">].transpose()</span>
+<span class="s2">del </span><span class="s1">arrays</span><span class="s2">, </span><span class="s1">f</span>
+<span class="s1">multidim_data = scaler.transform(multidim_data)</span>
+<span class="s1">predicted_ann = model.predict(multidim_data)</span>
+<span class="s1">predictpath = </span><span class="s3">'Your predictpath'</span>
+<span class="s1">scipy.io.savemat(predictpath +</span><span class="s3">'dense_4x4096_model_prediction.mat'</span><span class="s2">, </span><span class="s1">mdict={</span><span class="s3">'predicted_ann'</span><span class="s1">:predicted_ann})</span>
+<hr class="ls0"><span class="s0">#%% 
+</span>
+<span class="s0"># calculate and visualize saliency</span>
+<span class="s1">!pip install https://github.com/raghakot/keras-vis/archive/master.zip</span>
+
+<span class="s2">from </span><span class="s1">vis.visualization </span><span class="s2">import </span><span class="s1">visualize_saliency</span>
+<span class="s2">from </span><span class="s1">vis.utils </span><span class="s2">import </span><span class="s1">utils</span>
+<span class="s2">import </span><span class="s1">matplotlib.pyplot </span><span class="s2">as </span><span class="s1">plt</span>
+<span class="s0"># Numbers to visualize</span>
+<span class="s1">indices_to_visualize = [ </span><span class="s4">10000</span><span class="s2">, </span><span class="s4">20000</span><span class="s2">, </span><span class="s4">30000</span><span class="s2">, </span><span class="s4">40000</span><span class="s2">, </span><span class="s4">50000</span><span class="s2">, </span><span class="s4">60000 </span><span class="s1">] </span><span class="s0">#or range(0,173383)</span>
+<span class="s1">layer_index = utils.find_layer_idx(model</span><span class="s2">, </span><span class="s3">'visualized_layer'</span><span class="s1">)</span>
+<span class="s0"># Visualize</span>
+<span class="s2">for </span><span class="s1">index_to_visualize </span><span class="s2">in </span><span class="s1">indices_to_visualize:</span>
+  <span class="s0"># Get input</span>
+  <span class="s1">input_spectrum = val_data[index_to_visualize</span><span class="s2">,</span><span class="s1">:</span><span class="s2">,</span><span class="s1">:]</span>
+  <span class="s1">input_class = np.argmax(val_label[index_to_visualize</span><span class="s2">,</span><span class="s1">:])</span>
+  <span class="s1">print(str(input_class))</span>
+  <span class="s0"># Generate visualization</span>
+  <span class="s0">#visualize_saliency_with_losses(input_tensor, losses, seed_input, keepdims=True)</span>
+  <span class="s1">visualization = visualize_saliency(model</span><span class="s2">, </span><span class="s1">layer_index</span><span class="s2">, </span><span class="s1">filter_indices=input_class</span><span class="s2">, </span><span class="s1">seed_input=input_spectrum</span><span class="s2">, </span><span class="s1">keepdims=</span><span class="s2">True</span><span class="s1">)</span>
+  <span class="s1">plt.figure()</span>
+  <span class="s1">plt.title(str(input_class))</span>
+  <span class="s1">plt.plot(visualization</span><span class="s2">,</span><span class="s3">'g'</span><span class="s1">)</span>
+  <span class="s1">plt.plot(scaler.inverse_transform(input_spectrum)</span><span class="s2">,</span><span class="s1">alpha=</span><span class="s4">0.25</span><span class="s1">)</span>
+  <span class="s1">plt.plot(input_spectrum</span><span class="s2">,</span><span class="s3">'b'</span><span class="s2">,</span><span class="s1">alpha=</span><span class="s4">0.3</span><span class="s1">)</span>
+  <span class="s1">plt.axvspan(</span><span class="s4">0</span><span class="s2">, </span><span class="s4">15</span><span class="s2">, </span><span class="s1">color=</span><span class="s3">'gray'</span><span class="s2">, </span><span class="s1">alpha=</span><span class="s4">0.3</span><span class="s1">)</span>
+  <span class="s1">plt.axvspan(</span><span class="s4">225</span><span class="s2">, </span><span class="s4">230</span><span class="s2">, </span><span class="s1">color=</span><span class="s3">'gray'</span><span class="s2">, </span><span class="s1">alpha=</span><span class="s4">0.2</span><span class="s1">)</span>
+  <span class="s1">plt.show</span>
+</pre>
+</body>
+</html>
